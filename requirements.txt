@@ -1,3 +1,7 @@
 google-api-python-client
 python-dotenv
 requests
+yt-dlp
+sqlalchemy
+pymysql
+panads
