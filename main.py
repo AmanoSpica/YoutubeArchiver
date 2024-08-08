@@ -32,84 +32,95 @@ def load_json(filename):
         data = json.load(f)
     return data
 
+def chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def into_str(video):
+    columns = []
+    columns.append(video["id"])
+
+    if video["isShorts"]:
+        columns.append("shorts")
+    elif "liveStreamingDetails" in video:
+        columns.append("liveArchive")
+    else:
+        columns.append("video")
+
+    columns.append(video["snippet"]["title"])
+    columns.append(video["snippet"]["description"] if "description" in video["snippet"] else None)
+    columns.append(video["snippet"]["publishedAt"].replace("T", " ").replace("Z", ""))
+
+    if "liveStreamingDetails" in video:
+        columns.append(video["liveStreamingDetails"]["scheduledStartTime"].replace("T", " ").replace("Z", "") if "scheduledStartTime" in video["liveStreamingDetails"] else None)
+        columns.append(video["liveStreamingDetails"]["actualStartTime"].replace("T", " ").replace("Z", "") if "actualStartTime" in video["liveStreamingDetails"] else None)
+        columns.append(video["liveStreamingDetails"]["actualEndTime"].replace("T", " ").replace("Z", "") if "actualEndTime" in video["liveStreamingDetails"] else None)
+    else:
+        columns.append(None)
+        columns.append(None)
+        columns.append(None)
+
+    columns.append(video["isShorts"])
+    columns.append(video["snippet"]["categoryId"] if "categoryId" in video["snippet"] else None)
+    columns.append("[" + ",".join([f"'{tag}'" for tag in video["snippet"]["tags"]]) + "]" if "tags" in video["snippet"] else None)
+
+    thumbnails = video["snippet"]["thumbnails"]
+    if "maxres" in thumbnails:
+        columns.append(thumbnails["maxres"]["url"])
+    elif "standard" in thumbnails:
+        columns.append(thumbnails["standard"]["url"])
+    elif "high" in thumbnails:
+        columns.append(thumbnails["high"]["url"])
+    elif "medium" in thumbnails:
+        columns.append(thumbnails["medium"]["url"])
+    else:
+        columns.append(thumbnails["default"]["url"])
+
+    columns.append(video["statistics"]["commentCount"] if "commentCount" in video["statistics"] else None)
+    columns.append(video["statistics"]["likeCount"] if "likeCount" in video["statistics"] else None)
+    columns.append(video["statistics"]["viewCount"])
+    return columns
+
+
 
 async def save_to_database(json_data):
-    rows = []
-    for video in json_data:
-        columns = []
-        columns.append(video["id"])
+    # json_data を20rowずつに分割して、それぞれのリストを作成
+    chunks_data = list(chunks(json_data, 20))
+    for chunk in chunks_data:
+        rows = []
+        for video in chunk:
+            columns = into_str(video)
+            rows.append(str(tuple(columns)).replace("None", "NULL"))
 
-        if video["isShorts"]:
-            columns.append("shorts")
-        elif "liveStreamingDetails" in video:
-            columns.append("liveArchive")
-        else:
-            columns.append("video")
-
-        columns.append(video["snippet"]["title"])
-        columns.append(video["snippet"]["description"] if "description" in video["snippet"] else None)
-        columns.append(video["snippet"]["publishedAt"].replace("T", " ").replace("Z", ""))
-
-        if "liveStreamingDetails" in video:
-            columns.append(video["liveStreamingDetails"]["scheduledStartTime"].replace("T", " ").replace("Z", "") if "scheduledStartTime" in video["liveStreamingDetails"] else None)
-            columns.append(video["liveStreamingDetails"]["actualStartTime"].replace("T", " ").replace("Z", "") if "actualStartTime" in video["liveStreamingDetails"] else None)
-            columns.append(video["liveStreamingDetails"]["actualEndTime"].replace("T", " ").replace("Z", "") if "actualStartTime" in video["liveStreamingDetails"] else None)
-        else:
-            columns.append(None)
-            columns.append(None)
-            columns.append(None)
-
-        columns.append(video["isShorts"])
-        columns.append(video["snippet"]["categoryId"] if "categoryId" in video["snippet"] else None)
-        columns.append("[" + ",".join([f"'{tag}'" for tag in video["snippet"]["tags"]]) + "]" if "tags" in video["snippet"] else None)
-
-        thumbnails = video["snippet"]["thumbnails"]
-        if "maxres" in thumbnails:
-            columns.append(thumbnails["maxres"]["url"])
-        elif "standard" in thumbnails:
-            columns.append(thumbnails["standard"]["url"])
-        elif "high" in thumbnails:
-            columns.append(thumbnails["high"]["url"])
-        elif "medium" in thumbnails:
-            columns.append(thumbnails["medium"]["url"])
-        else:
-            columns.append(thumbnails["default"]["url"])
-
-        columns.append(video["statistics"]["commentCount"] if "commentCount" in video["statistics"] else None)
-        columns.append(video["statistics"]["likeCount"] if "likeCount" in video["statistics"] else None)
-        columns.append(video["statistics"]["viewCount"])
-
-        rows.append(str(tuple(columns)).replace("None", "NULL"))
+        query = f"""
+            INSERT INTO TargetVideo
+                (id, videoType, title, description, publishedAt,
+                liveStreamingDetails_scheduledStartTime, liveStreamingDetails_actualStartTime,
+                liveStreamingDetails_actualEndTime, isShorts, categoryId, tags, thumbnails_url,
+                commentCount, likeCount, viewCount)
+            VALUES
+                {",".join(rows)}
+            ON DUPLICATE KEY
+            UPDATE
+                videoType = VALUES(videoType),
+                title = VALUES(title),
+                description = VALUES(description),
+                publishedAt = VALUES(publishedAt),
+                liveStreamingDetails_scheduledStartTime = VALUES(liveStreamingDetails_scheduledStartTime),
+                liveStreamingDetails_actualStartTime = VALUES(liveStreamingDetails_actualStartTime),
+                liveStreamingDetails_actualEndTime = VALUES(liveStreamingDetails_actualEndTime),
+                isShorts = VALUES(isShorts),
+                categoryId = VALUES(categoryId),
+                tags = VALUES(tags),
+                thumbnails_url = VALUES(thumbnails_url),
+                commentCount = VALUES(commentCount),
+                likeCount = VALUES(likeCount),
+                viewCount = VALUES(viewCount);
+            """
 
 
-    query = f"""
-        INSERT INTO TargetVideo
-            (id, videoType, title, description, publishedAt,
-            liveStreamingDetails_scheduledStartTime, liveStreamingDetails_actualStartTime,
-            liveStreamingDetails_actualEndTime, isShorts, categoryId, tags, thumbnails_url,
-            commentCount, likeCount, viewCount)
-        VALUES
-            {",".join(rows)}
-        ON DUPLICATE KEY
-        UPDATE
-            videoType = VALUES(videoType),
-            title = VALUES(title),
-            description = VALUES(description),
-            publishedAt = VALUES(publishedAt),
-            liveStreamingDetails_scheduledStartTime = VALUES(liveStreamingDetails_scheduledStartTime),
-            liveStreamingDetails_actualStartTime = VALUES(liveStreamingDetails_actualStartTime),
-            liveStreamingDetails_actualEndTime = VALUES(liveStreamingDetails_actualEndTime),
-            isShorts = VALUES(isShorts),
-            categoryId = VALUES(categoryId),
-            tags = VALUES(tags),
-            thumbnails_url = VALUES(thumbnails_url),
-            commentCount = VALUES(commentCount),
-            likeCount = VALUES(likeCount),
-            viewCount = VALUES(viewCount);
-        """
-
-
-    await db.commit(query)
+        await db.commit(query)
 
 
 def main():

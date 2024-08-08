@@ -12,7 +12,7 @@ class DBManager:
                  db_host:str,
                  db_port:str,
                  db_database:str) -> None:
-        url = f'mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_database}?charset=utf8'
+        url = f'mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_database}?charset=utf8mb4'
         self.engine = create_engine(url,
                                     pool_recycle=360,
                                     echo=False)
@@ -32,8 +32,8 @@ class DBManager:
         with self.engine.connect() as conn:
             with conn.begin():
                 try:
-                    result = await conn.execute(text(query))
-                    data = await result.fetchall()
+                    result = conn.execute(text(query))
+                    data = result.fetchall()
                 except Exception as e:
                     conn.rollback()
                     raise Exception(f"Error: {e}")
