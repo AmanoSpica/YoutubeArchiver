@@ -1,4 +1,5 @@
 import os
+import re
 
 import pandas as pd
 
@@ -17,7 +18,22 @@ class DBManager:
                                     pool_recycle=360,
                                     echo=False)
 
-    async def commit(self, query) -> None:
+
+    async def _format_response(self, data: pd.DataFrame) -> pd.DataFrame:
+        # 正規表現でリストを見つけ、リスト型に変換する
+        list_pattern = re.compile(r"\[.*?\]")
+        for column in data.columns:
+            data[column] = data[column].apply(lambda x: eval(x) if re.match(list_pattern, str(x)) else x)
+
+        # 正規表現で辞書型を見つけ、辞書型に変換する
+        dict_pattern = re.compile(r"\{.*?\}")
+        for column in data.columns:
+            data[column] = data[column].apply(lambda x: eval(x) if re.match(dict_pattern, str(x)) else x)
+
+        return data
+
+
+    async def _commit(self, query) -> None:
         with self.engine.connect() as conn:
             with conn.begin():
                 try:
@@ -28,7 +44,8 @@ class DBManager:
                 else:
                     return
 
-    async def fetch(self, query):
+
+    async def _fetch(self, query) -> pd.DataFrame:
         with self.engine.connect() as conn:
             with conn.begin():
                 try:
@@ -38,4 +55,12 @@ class DBManager:
                     conn.rollback()
                     raise Exception(f"Error: {e}")
         data = pd.DataFrame(data, columns=result.keys())
+        data = await self._format_response(data)
         return data
+
+
+    async def query(self, query):
+        if "SELECT" in query:
+            return await self._fetch(query)
+        else:
+            return await self._commit(query)

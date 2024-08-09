@@ -3,10 +3,13 @@ import json
 import time
 import asyncio
 
+import pandas as pd
 from dotenv import load_dotenv, find_dotenv
+from term_printer import Color, cprint, StdText
 
-from modules.get_video_data import GetVideoData
 from modules.db import DBManager
+from modules.get_video_data import GetVideoData
+from modules.youtube_dl import download_youtube_video, download_youtube_thumbnail
 
 
 load_dotenv(find_dotenv())
@@ -32,6 +35,7 @@ def load_json(filename):
         data = json.load(f)
     return data
 
+
 def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
@@ -44,26 +48,34 @@ def into_str(video):
     if video["isShorts"]:
         columns.append("shorts")
     elif "liveStreamingDetails" in video:
+        # ライブ配信アーカイブまたはプレミア公開
         columns.append("liveArchive")
     else:
         columns.append("video")
 
     columns.append(video["snippet"]["title"])
-    columns.append(video["snippet"]["description"] if "description" in video["snippet"] else None)
-    columns.append(video["snippet"]["publishedAt"].replace("T", " ").replace("Z", ""))
+    columns.append(video["snippet"]["description"]
+                   if "description" in video["snippet"] else None)
+    columns.append(video["snippet"]["publishedAt"].replace(
+        "T", " ").replace("Z", ""))
 
     if "liveStreamingDetails" in video:
-        columns.append(video["liveStreamingDetails"]["scheduledStartTime"].replace("T", " ").replace("Z", "") if "scheduledStartTime" in video["liveStreamingDetails"] else None)
-        columns.append(video["liveStreamingDetails"]["actualStartTime"].replace("T", " ").replace("Z", "") if "actualStartTime" in video["liveStreamingDetails"] else None)
-        columns.append(video["liveStreamingDetails"]["actualEndTime"].replace("T", " ").replace("Z", "") if "actualEndTime" in video["liveStreamingDetails"] else None)
+        columns.append(video["liveStreamingDetails"]["scheduledStartTime"].replace("T", " ").replace(
+            "Z", "") if "scheduledStartTime" in video["liveStreamingDetails"] else None)
+        columns.append(video["liveStreamingDetails"]["actualStartTime"].replace("T", " ").replace(
+            "Z", "") if "actualStartTime" in video["liveStreamingDetails"] else None)
+        columns.append(video["liveStreamingDetails"]["actualEndTime"].replace("T", " ").replace(
+            "Z", "") if "actualEndTime" in video["liveStreamingDetails"] else None)
     else:
         columns.append(None)
         columns.append(None)
         columns.append(None)
 
     columns.append(video["isShorts"])
-    columns.append(video["snippet"]["categoryId"] if "categoryId" in video["snippet"] else None)
-    columns.append("[" + ",".join([f"'{tag}'" for tag in video["snippet"]["tags"]]) + "]" if "tags" in video["snippet"] else None)
+    columns.append(video["snippet"]["categoryId"]
+                   if "categoryId" in video["snippet"] else None)
+    columns.append("[" + ",".join([f"'{tag}'" for tag in video["snippet"]
+                   ["tags"]]) + "]" if "tags" in video["snippet"] else None)
 
     thumbnails = video["snippet"]["thumbnails"]
     if "maxres" in thumbnails:
@@ -77,16 +89,16 @@ def into_str(video):
     else:
         columns.append(thumbnails["default"]["url"])
 
-    columns.append(video["statistics"]["commentCount"] if "commentCount" in video["statistics"] else None)
-    columns.append(video["statistics"]["likeCount"] if "likeCount" in video["statistics"] else None)
+    columns.append(video["statistics"]["commentCount"]
+                   if "commentCount" in video["statistics"] else None)
+    columns.append(video["statistics"]["likeCount"]
+                   if "likeCount" in video["statistics"] else None)
     columns.append(video["statistics"]["viewCount"])
     return columns
 
 
-
 async def save_to_database(json_data):
-    # json_data を20rowずつに分割して、それぞれのリストを作成
-    chunks_data = list(chunks(json_data, 20))
+    chunks_data = list(chunks(json_data, 30))
     for chunk in chunks_data:
         rows = []
         for video in chunk:
@@ -119,17 +131,107 @@ async def save_to_database(json_data):
                 viewCount = VALUES(viewCount);
             """
 
+        await db.query(query)
 
-        await db.commit(query)
+
+def download_and_upload():
+    cprint("Youtube動画データを取得・更新しました。", attrs=[Color.BRIGHT_GREEN])
+    cprint("ダウンロードを開始するにはEnterキーを押してください。", attrs=[Color.BRIGHT_GREEN], end="")
+    input()
+
+    cprint("\n何本の動画をダウンロードしますか？ (投稿日時が古いものから処理します): ", attrs=[Color.CYAN], end="")
+    output_video_number = input()
+    cprint("ダウンロードした動画をアップロードしますか？ (y/n): ", attrs=[Color.CYAN], end="")
+    is_upload = input()
+
+    if is_upload == "y" or is_upload == "Y" or is_upload == "yes" or is_upload == "Yes":
+        is_upload = True
+        cprint("\nダウンロード・アップロードを開始します。", attrs=[Color.MAGENTA])
+    else:
+        is_upload = False
+        cprint("\nダウンロードを開始します。", attrs=[Color.BRIGHT_YELLOW])
+
+    target_videos: pd.DataFrame = asyncio.run(
+        db.query(
+            f"SELECT * FROM TargetVideo WHERE isDownloaded = 0 AND isPushed = 0 ORDER BY publishedAt ASC LIMIT {output_video_number};"
+        )
+    )
+
+    print(f"\nGetting {len(target_videos)} videos to download...")
+    startTime = time.time()
+    for i, video in target_videos.iterrows():
+        temp_files = []
+        video_time = time.time()
+
+        cprint(f"\nProgress:  ({i + 1}/{len(target_videos)}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
+
+        progress_time = time.time()
+        temp_files.append(download_youtube_video(video["id"], "temp/videos"))
+        cprint(f"Downloaded: {temp_files[-1]}", attrs=[Color.BRIGHT_GREEN])
+        print(f"Time: {time.time() - progress_time:.2f} sec")
+        print(f"Total Time: {time.time() - startTime:.2f} sec\n")
+
+        progress_time = time.time()
+        temp_files.append(download_youtube_thumbnail(video["id"], "temp/thumbnails", video["thumbnails_url"]))
+        cprint(f"Downloaded: {temp_files[-1]} (thumbnail)", attrs=[Color.BRIGHT_GREEN])
+        print(f"Time: {time.time() - progress_time:.2f} sec")
+        print(f"Total Time: {time.time() - startTime:.2f} sec\n")
+
+        # Update database
+        asyncio.run(
+            db.query(
+                f"UPDATE TargetVideo SET isDownloaded = 1 WHERE id = '{video['id']}';"
+            )
+        )
+
+        progress_time = time.time()
+        if is_upload:
+            cprint(f"Upload Progress: {video['title']}", attrs=[Color.BRIGHT_YELLOW])
+
+            ### ここにアップロード処理を記述する ###
+            time.sleep(1)
+
+            cprint(f"Uploaded: {video['title']}", attrs=[Color.BRIGHT_GREEN])
+            print(f"Time: {time.time() - progress_time:.2f} sec")
+            print(f"Total Time: {time.time() - startTime:.2f} sec\n")
+
+            # Update database
+            asyncio.run(
+                db.query(
+                    f"UPDATE TargetVideo SET isPushed = 1 WHERE id = '{video['id']}';"
+                )
+            )
+
+            for temp_file in temp_files:
+                # os.remove(temp_file)
+                print(f"Removed: {temp_file}")
+
+                # Update database
+                asyncio.run(
+                    db.query(
+                        f"UPDATE TargetVideo SET isDownloaded = 0 WHERE id = '{video['id']}';"
+                    )
+                )
+
+        cprint(f"Finished: {video['title']}", attrs=[Color.GREEN])
+        print(f"Time: {time.time() - video_time:.2f} sec")
+        print(f"Total Time: {time.time() - startTime:.2f} sec\n")
+
+
+    cprint("\nダウンロード・アップロードが完了しました。", attrs=[Color.MAGENTA])
+    print(f"Total Time: {time.time() - startTime:.2f} sec\n")
+
 
 
 def main():
-    get_video_data.save_video_data()
+    # get_video_data.save_video_data()
     video_data = load_json("data/videos.json")
     asyncio.run(save_to_database(video_data))
+    download_and_upload()
+
 
 
 if __name__ == "__main__":
-    print("##### Start #####")
+    cprint("##### Start #####", attrs=[Color.BRIGHT_RED])
     main()
-    print("##### End #####")
+    cprint("##### End #####", attrs=[Color.BRIGHT_RED])
