@@ -53,7 +53,6 @@ class YoutubeVideoManager:
 
         )
         response = request.execute()
-        print(json.dumps(response, indent=4))
 
         if thumbnail_file_path:
             self.upload_thumbnail(response["id"], thumbnail_file_path)
@@ -69,7 +68,6 @@ class YoutubeVideoManager:
             videoId = video_id
         )
         response = request.execute()
-        print(json.dumps(response, indent=4))
 
         return response
 

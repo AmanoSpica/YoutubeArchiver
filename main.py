@@ -33,7 +33,7 @@ db = DBManager(
 
 youtube = YoutubeVideoManager(
     upload_channel_id=os.getenv("UPLOAD_YOUTUBE_CHANNEL_ID"),
-    identity_file="client_secret_test.json"  # TODO テスト用
+    identity_file="client_secret.json"
 )
 
 
@@ -49,6 +49,8 @@ def chunks(lst, n):
 
 
 def format_datetime(datetime_str):
+    if datetime_str is None:
+        return ""
     return datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S").strftime("%Y/%m/%d %H:%M:%S")
 
 
@@ -82,7 +84,6 @@ def into_str(video):
         columns.append(None)
         columns.append(None)
 
-    columns.append(video["isShorts"])
     columns.append(video["snippet"]["categoryId"]
                    if "categoryId" in video["snippet"] else None)
     columns.append("[" + ",".join([f"'{tag}'" for tag in video["snippet"]
@@ -120,7 +121,7 @@ async def save_to_database(json_data):
             INSERT INTO TargetVideo
                 (id, videoType, title, description, publishedAt,
                 liveStreamingDetails_scheduledStartTime, liveStreamingDetails_actualStartTime,
-                liveStreamingDetails_actualEndTime, isShorts, categoryId, tags, thumbnails_url,
+                liveStreamingDetails_actualEndTime, categoryId, tags, thumbnails_url,
                 commentCount, likeCount, viewCount)
             VALUES
                 {",".join(rows)}
@@ -133,7 +134,6 @@ async def save_to_database(json_data):
                 liveStreamingDetails_scheduledStartTime = VALUES(liveStreamingDetails_scheduledStartTime),
                 liveStreamingDetails_actualStartTime = VALUES(liveStreamingDetails_actualStartTime),
                 liveStreamingDetails_actualEndTime = VALUES(liveStreamingDetails_actualEndTime),
-                isShorts = VALUES(isShorts),
                 categoryId = VALUES(categoryId),
                 tags = VALUES(tags),
                 thumbnails_url = VALUES(thumbnails_url),
@@ -215,23 +215,23 @@ def download_and_upload():
                 continue
 
             video_info += f"投稿日時: {video['publishedAt']}\n"
-            video_info += f"再生回数: {video['viewCount']} 回\n"
-            video_info += f"高評価数: {video['likeCount']} 件\n"
-            video_info += f"コメント数: {video['commentCount']} 件\n"
+            video_info += f"再生回数: {video['viewCount']} 回\n" if video["viewCount"] is not None else "再生回数: [非公開]\n"
+            video_info += f"高評価数: {video['likeCount']} 件\n" if video["likeCount"] is not None else "高評価数: [非公開]\n"
+            video_info += f"コメント数: {video['commentCount']} 件\n" if video["commentCount"] is not None else "コメント数: [コメント無効]\n"
             video_info += f"※ データは取得時点({datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')})のものです。\n\nこの動画は「Aqua Ch. 湊あくあ」さんの公式チャンネルから取得したアーカイブ動画です。"
 
-            print(f"Title: {title}")
-            print(f"{'#'*20}\n\n{video_info}\n\n{'#'*20}\n\n\n\n{video['description']}")
-            print(f"Tags: {video['tags']}")
-            print(f"Category: {video['categoryId']}")
-            # youtube.upload_video(
-            #     video_file_path=video_file_path,
-            #     title=title,
-            #     description=f"{'#'*20}\n\n{video_info}\n\n{'#'*20}\n\n\n\n{video['description']}",
-            #     category_id=video["categoryId"],
-            #     thumbnail_file_path=thumbnail_file_path,
-            #     tags=video["tags"]
-            # )
+            # print(f"Title: {title}")
+            # print(f"{'#'*20}\n\n{video_info}\n\n{'#'*20}\n\n\n\n{video['description']}")
+            # print(f"Tags: {video['tags']}")
+            # print(f"Category: {video['categoryId']}")
+            youtube.upload_video(
+                video_file_path=video_file_path,
+                title=title,
+                description=f"{'#'*20}\n\n{video_info}\n\n{'#'*20}\n\n\n\n{video['description']}",
+                category_id=video["categoryId"],
+                thumbnail_file_path=thumbnail_file_path,
+                tags=video["tags"]
+            )
 
             cprint(f"Uploaded: {video['title']}", attrs=[Color.BRIGHT_GREEN])
             print(f"Time: {time.time() - progress_time:.2f} sec")
@@ -267,9 +267,9 @@ def download_and_upload():
 
 
 def main():
-    # get_video_data.save_video_data()
-    # video_data = load_json("data/videos.json")
-    # asyncio.run(save_to_database(video_data))
+    get_video_data.save_video_data()
+    video_data = load_json("data/videos.json")
+    asyncio.run(save_to_database(video_data))
     download_and_upload()
 
 
