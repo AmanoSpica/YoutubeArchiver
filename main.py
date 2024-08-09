@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import datetime
 import asyncio
 
 import pandas as pd
@@ -10,6 +11,7 @@ from term_printer import Color, cprint, StdText
 from modules.db import DBManager
 from modules.get_video_data import GetVideoData
 from modules.youtube_dl import download_youtube_video, download_youtube_thumbnail
+from modules.youtube_uploader import YoutubeVideoManager
 
 
 load_dotenv(find_dotenv())
@@ -29,6 +31,11 @@ db = DBManager(
     db_database=os.getenv("DB_DATABASE")
 )
 
+youtube = YoutubeVideoManager(
+    upload_channel_id=os.getenv("UPLOAD_YOUTUBE_CHANNEL_ID"),
+    identity_file="client_secret_test.json"  # TODO テスト用
+)
+
 
 def load_json(filename):
     with open(filename, 'r', encoding='utf-8') as f:
@@ -39,6 +46,10 @@ def load_json(filename):
 def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
+
+
+def format_datetime(datetime_str):
+    return datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S").strftime("%Y/%m/%d %H:%M:%S")
 
 
 def into_str(video):
@@ -160,20 +171,19 @@ def download_and_upload():
     print(f"\nGetting {len(target_videos)} videos to download...")
     startTime = time.time()
     for i, video in target_videos.iterrows():
-        temp_files = []
         video_time = time.time()
 
         cprint(f"\nProgress:  ({i + 1}/{len(target_videos)}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
 
         progress_time = time.time()
-        temp_files.append(download_youtube_video(video["id"], "temp/videos"))
-        cprint(f"Downloaded: {temp_files[-1]}", attrs=[Color.BRIGHT_GREEN])
+        video_file_path = download_youtube_video(video["id"], "temp/videos")
+        cprint(f"Downloaded: {video_file_path}", attrs=[Color.BRIGHT_GREEN])
         print(f"Time: {time.time() - progress_time:.2f} sec")
         print(f"Total Time: {time.time() - startTime:.2f} sec\n")
 
         progress_time = time.time()
-        temp_files.append(download_youtube_thumbnail(video["id"], "temp/thumbnails", video["thumbnails_url"]))
-        cprint(f"Downloaded: {temp_files[-1]} (thumbnail)", attrs=[Color.BRIGHT_GREEN])
+        thumbnail_file_path = download_youtube_thumbnail(video["id"], "temp/thumbnails", video["thumbnails_url"])
+        cprint(f"Downloaded: {thumbnail_file_path} (thumbnail)", attrs=[Color.BRIGHT_GREEN])
         print(f"Time: {time.time() - progress_time:.2f} sec")
         print(f"Total Time: {time.time() - startTime:.2f} sec\n")
 
@@ -188,8 +198,40 @@ def download_and_upload():
         if is_upload:
             cprint(f"Upload Progress: {video['title']}", attrs=[Color.BRIGHT_YELLOW])
 
-            ### ここにアップロード処理を記述する ###
-            time.sleep(1)
+            title = video["title"]
+            video_info = ""
+            if video["videoType"] == "shorts":
+                video_info += "【#Shorts】\n"
+                title += "  #Shorts"
+            elif video["videoType"] == "liveArchive":
+                video_info += "【配信アーカイブ または プレミア公開 動画】\n"
+                video_info += f"配信・公開予定日時: {format_datetime(video['liveStreamingDetails_scheduledStartTime'])}\n"
+                video_info += f"配信・公開開始日時: {format_datetime(video['liveStreamingDetails_actualStartTime'])}\n"
+                video_info += f"配信・公開終了日時: {format_datetime(video['liveStreamingDetails_actualEndTime'])}\n"
+            elif video["videoType"] == "video":
+                video_info += "【通常動画】\n"
+            else:
+                input("Error: videoType is invalid. Press Enter to continue.")
+                continue
+
+            video_info += f"投稿日時: {video['publishedAt']}\n"
+            video_info += f"再生回数: {video['viewCount']} 回\n"
+            video_info += f"高評価数: {video['likeCount']} 件\n"
+            video_info += f"コメント数: {video['commentCount']} 件\n"
+            video_info += f"※ データは取得時点({datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')})のものです。\n\nこの動画は「Aqua Ch. 湊あくあ」さんの公式チャンネルから取得したアーカイブ動画です。"
+
+            print(f"Title: {title}")
+            print(f"{'#'*20}\n\n{video_info}\n\n{'#'*20}\n\n\n\n{video['description']}")
+            print(f"Tags: {video['tags']}")
+            print(f"Category: {video['categoryId']}")
+            # youtube.upload_video(
+            #     video_file_path=video_file_path,
+            #     title=title,
+            #     description=f"{'#'*20}\n\n{video_info}\n\n{'#'*20}\n\n\n\n{video['description']}",
+            #     category_id=video["categoryId"],
+            #     thumbnail_file_path=thumbnail_file_path,
+            #     tags=video["tags"]
+            # )
 
             cprint(f"Uploaded: {video['title']}", attrs=[Color.BRIGHT_GREEN])
             print(f"Time: {time.time() - progress_time:.2f} sec")
@@ -202,8 +244,9 @@ def download_and_upload():
                 )
             )
 
+            temp_files = [video_file_path, thumbnail_file_path]
             for temp_file in temp_files:
-                # os.remove(temp_file)
+                os.remove(temp_file)
                 print(f"Removed: {temp_file}")
 
                 # Update database
@@ -225,8 +268,8 @@ def download_and_upload():
 
 def main():
     # get_video_data.save_video_data()
-    video_data = load_json("data/videos.json")
-    asyncio.run(save_to_database(video_data))
+    # video_data = load_json("data/videos.json")
+    # asyncio.run(save_to_database(video_data))
     download_and_upload()
 
 
