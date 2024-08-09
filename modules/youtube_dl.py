@@ -4,13 +4,8 @@ import urllib.request
 
 def download_youtube_video(video_id, target_dir):
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
         'outtmpl': f'{target_dir}/%(id)s.%(ext)s',
-        'merge_output_format': 'mp4',
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }]
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
