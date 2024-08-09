@@ -58,6 +58,12 @@ def format_datetime(datetime_str):
         return datetime_str.strftime("%Y/%m/%d %H:%M:%S")
 
 
+def insert_comma(text: str) -> str:
+    # 3文字ごとにカンマを挿入
+    text = int(text)
+    return str("{:,}".format(text))
+
+
 def into_str(video):
     columns = []
     columns.append(video["id"])
@@ -219,9 +225,9 @@ def download_and_upload():
                 continue
 
             video_info += f"投稿日時: {format_datetime(video['publishedAt'])}\n"
-            video_info += f"再生回数: {video['viewCount']} 回\n" if video["viewCount"] is not None else "再生回数: [非公開]\n"
-            video_info += f"高評価数: {video['likeCount']} 件\n" if video["likeCount"] is not None else "高評価数: [非公開]\n"
-            video_info += f"コメント数: {video['commentCount']} 件\n" if video["commentCount"] is not None else "コメント数: [コメント無効]\n"
+            video_info += f"再生回数: {insert_comma(video['viewCount'])} 回\n" if video["viewCount"] is not None else "再生回数: [非公開]\n"
+            video_info += f"高評価数: {insert_comma(video['likeCount'])} 件\n" if video["likeCount"] is not None else "高評価数: [非公開]\n"
+            video_info += f"コメント数: {insert_comma(video['commentCount'])} 件\n" if video["commentCount"] is not None else "コメント数: [コメント無効]\n"
             video_info += f"※ データは取得時点({datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')})のものです。\n\nこの動画は「Aqua Ch. 湊あくあ」さんの公式チャンネルから取得したアーカイブ動画です。"
 
             # print(f"Title: {title}")
