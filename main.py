@@ -15,6 +15,7 @@ from modules.youtube_uploader import YoutubeVideoManager
 
 
 load_dotenv(find_dotenv())
+print("API Key: " + os.getenv("YOUTUBE_API_KEY"))
 
 get_video_data = GetVideoData(
     api_key=os.getenv("YOUTUBE_API_KEY"),
@@ -50,8 +51,11 @@ def chunks(lst, n):
 
 def format_datetime(datetime_str):
     if datetime_str is None:
-        return ""
-    return datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S").strftime("%Y/%m/%d %H:%M:%S")
+        return "[非公開]"
+    if type(datetime_str) == str:
+        return datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S").strftime("%Y/%m/%d %H:%M:%S")
+    else:
+        return datetime_str.strftime("%Y/%m/%d %H:%M:%S")
 
 
 def into_str(video):
@@ -205,7 +209,7 @@ def download_and_upload():
                 title += "  #Shorts"
             elif video["videoType"] == "liveArchive":
                 video_info += "【配信アーカイブ または プレミア公開 動画】\n"
-                video_info += f"配信・公開予定日時: {format_datetime(video['liveStreamingDetails_scheduledStartTime'])}\n"
+                video_info += f"配信・公開予定日時: {format_datetime(video['liveStreamingDetails_scheduledStartTime'])}\n" if video["liveStreamingDetails_scheduledStartTime"] is not None else "配信・公開予定日時: [指定なし]\n"
                 video_info += f"配信・公開開始日時: {format_datetime(video['liveStreamingDetails_actualStartTime'])}\n"
                 video_info += f"配信・公開終了日時: {format_datetime(video['liveStreamingDetails_actualEndTime'])}\n"
             elif video["videoType"] == "video":
@@ -214,7 +218,7 @@ def download_and_upload():
                 input("Error: videoType is invalid. Press Enter to continue.")
                 continue
 
-            video_info += f"投稿日時: {video['publishedAt']}\n"
+            video_info += f"投稿日時: {format_datetime(video['publishedAt'])}\n"
             video_info += f"再生回数: {video['viewCount']} 回\n" if video["viewCount"] is not None else "再生回数: [非公開]\n"
             video_info += f"高評価数: {video['likeCount']} 件\n" if video["likeCount"] is not None else "高評価数: [非公開]\n"
             video_info += f"コメント数: {video['commentCount']} 件\n" if video["commentCount"] is not None else "コメント数: [コメント無効]\n"

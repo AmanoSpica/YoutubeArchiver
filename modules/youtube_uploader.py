@@ -46,7 +46,8 @@ class YoutubeVideoManager:
                     "uploadStatus": "uploaded",
                     "privacyStatus": "private",
                     "license": "youtube",
-                    "embeddable": "true"
+                    "embeddable": "true",
+                    "selfDeclaredMadeForKids": "false"
                 }
             },
             media_body = MediaFileUpload(video_file_path),
