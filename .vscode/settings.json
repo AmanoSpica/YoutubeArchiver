@@ -3,10 +3,12 @@
 		"Archiver",
 		"bestaudio",
 		"bestvideo",
+		"chunksize",
 		"embeddable",
 		"maxres",
 		"outtmpl",
 		"postprocessors",
-		"preferedformat"
+		"preferedformat",
+		"RETRIABLE"
 	]
 }

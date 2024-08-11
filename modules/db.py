@@ -1,10 +1,16 @@
 import os
 import re
+from datetime import datetime
 
 import pandas as pd
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
+
+
+def sql_log(query: str) -> None:
+    with open("sql_log.txt", "a", encoding="utf-8") as f:
+        f.write(f"Query [{datetime.now()}]\n{query}\n\n")
 
 class DBManager:
     def __init__(self,
@@ -60,6 +66,7 @@ class DBManager:
 
 
     async def query(self, query):
+        sql_log(query)
         if "SELECT" in query:
             return await self._fetch(query)
         else:

@@ -164,5 +164,7 @@ cython_debug/
 temp
 data
 
+sql_log.txt
+
 # GCP Credentials
 client_secret*.json

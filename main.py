@@ -85,8 +85,7 @@ def into_str(video):
     columns.append(video["snippet"]["title"])
     columns.append(video["snippet"]["description"]
                    if "description" in video["snippet"] else None)
-    columns.append(video["snippet"]["publishedAt"].replace(
-        "T", " ").replace("Z", ""))
+    columns.append(video["snippet"]["publishedAt"].replace("T", " ").replace("Z", ""))
 
     if "liveStreamingDetails" in video:
         columns.append(video["liveStreamingDetails"]["scheduledStartTime"].replace("T", " ").replace(
@@ -147,6 +146,9 @@ def format_video_info(video_data: dict):
     video_info += f"コメント数: {insert_comma(video_data['commentCount'])} 件\n" if video_data["commentCount"] is not None else "コメント数: [コメント無効]\n"
     video_info += f"※ データは取得時点({datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')})のものです。\n\nこの動画は「Aqua Ch. 湊あくあ」さんの公式チャンネルから取得したアーカイブ動画です。"
     video_info = f"{'#'*20}\n\n{video_info}\n\n{'#'*20}\n\n\n\n{video_data['description']}"
+
+    title = title.replace("u3000", "　")
+    video_info = video_info.replace("u3000", "　")
     return title, video_info
 
 
@@ -258,7 +260,12 @@ def CLI_dl_and_up():
 
     cprint("\n何本の動画をダウンロードしますか？ (投稿日時が古いものから処理します): ", attrs=[Color.CYAN], end="")
     output_video_number = input()
-    if not output_video_number <= 60:
+    if not output_video_number.isdecimal():
+        cprint("数字を入力してください。", attrs=[Color.RED])
+        return
+
+    output_video_number = int(output_video_number)
+    if not int(output_video_number) <= 60:
         cprint("60本以上の動画をダウンロードすることはできません。最大の60本を処理します。", attrs=[Color.RED])
         output_video_number = 60
     cprint("ダウンロードした動画をアップロードしますか？ (y/n): ", attrs=[Color.CYAN], end="")
@@ -275,7 +282,7 @@ def CLI_dl_and_up():
         )
 
         if not remain_videos.empty:
-            cprint(f"前回の処理でアップロードされていない動画が{remain_videos}本あります。", attrs=[Color.BRIGHT_RED])
+            cprint(f"前回の処理でアップロードされていない動画が{len(remain_videos)}本あります。", attrs=[Color.BRIGHT_RED])
             cprint("アップロードを続行しますか？ (y/n): ", attrs=[Color.CYAN], end="")
             is_upload_remain = input()
             if is_upload_remain == "y" or is_upload_remain == "Y" or is_upload_remain == "yes" or is_upload_remain == "Yes":
@@ -325,7 +332,7 @@ def CLI_dl_and_up():
 
 
 def main():
-    get_video_data.save_video_data()
+    # get_video_data.save_video_data()
     video_data = load_json("data/videos.json")
     asyncio.run(save_to_database(video_data))
     CLI_dl_and_up()
