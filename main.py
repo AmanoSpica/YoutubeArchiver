@@ -34,6 +34,9 @@ db = DBManager(
 identity_files = []
 for i in range(1, 11):
     file_name = f"identity/client_secret_YoutubeArchiver-uploader{str(i).zfill(2)}.json"
+    # TODO 20240811用
+    if i == 4:
+        continue
     if os.path.exists(file_name):
         identity_files.append(file_name)
 

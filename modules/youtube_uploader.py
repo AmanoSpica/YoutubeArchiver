@@ -27,22 +27,13 @@ class YoutubeVideoManager:
         if not uploader_identity_file:
             self.uploader.append(self.youtube)
         else:
-            self.uploader_identity_file = uploader_identity_file
-            flow = InstalledAppFlow.from_client_secrets_file(uploader_identity_file[0], scopes)
-            credentials = flow.run_local_server(port=8000)
-            self.uploader.append(build("youtube", "v3", credentials=credentials))
-            time.sleep(1)
-
-            # TODO 以下は消す
-            self.uploader.append("dummy")
-            flow = InstalledAppFlow.from_client_secrets_file(uploader_identity_file[3], scopes)
-            credentials = flow.run_local_server(port=8003)
-            self.uploader.append(build("youtube", "v3", credentials=credentials))
-            time.sleep(1)
-
+            for identity in uploader_identity_file:
+                flow = InstalledAppFlow.from_client_secrets_file(identity, scopes)
+                credentials = flow.run_local_server()
+                self.uploader.append(build("youtube", "v3", credentials=credentials))
 
         self.upload_channel_id = upload_channel_id
-        self.number_of_upload_video = 15   #TODO 0
+        self.number_of_upload_video = 0
         self.number_of_uploader = 0
 
 
@@ -58,16 +49,10 @@ class YoutubeVideoManager:
         if self.number_of_uploader > len(self.uploader_identity_file):
             raise Exception("The number of videos uploaded has exceeded the limit.")
 
-        # 6本ごとにuploaderを追加
-        if self.number_of_upload_video % 6 == 0 and self.number_of_upload_video != 0:
+        if self.number_of_upload_video % len(self.uploader) == 0:
             self.number_of_uploader += 1
-            flow = InstalledAppFlow.from_client_secrets_file(self.uploader_identity_file[self.number_of_uploader], scopes)
-            credentials = flow.run_local_server(port=8000 + self.number_of_uploader)
-            self.uploader.append(build("youtube", "v3", credentials=credentials))
-            time.sleep(1)
 
-        self.number_of_upload_video += 1
-        yt_uploader = self.uploader[-1]
+        yt_uploader = self.uploader[self.number_of_uploader]
 
         print(f"Uploader: {self.number_of_uploader}番目")
         print(f"Video: {self.number_of_upload_video}本目")
