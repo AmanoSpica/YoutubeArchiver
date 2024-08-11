@@ -17,7 +17,7 @@ $ env\Scripts\Activate.ps1
 # (Mac)
 $ source env/bin/activate
 
-$ pip install -m requirements.txt
+$ pip install -r requirements.txt
 $ python3 main.py
 ```
 ※環境によっては`python3`ではなく`python`の場合があります。
