@@ -332,7 +332,7 @@ def CLI_dl_and_up():
 
 
 def main():
-    # get_video_data.save_video_data()
+    get_video_data.save_video_data()
     video_data = load_json("data/videos.json")
     asyncio.run(save_to_database(video_data))
     CLI_dl_and_up()

@@ -33,16 +33,9 @@ class YoutubeVideoManager:
             self.uploader.append(build("youtube", "v3", credentials=credentials))
             time.sleep(1)
 
-            # TODO 以下は消す
-            self.uploader.append("dummy")
-            flow = InstalledAppFlow.from_client_secrets_file(uploader_identity_file[3], scopes)
-            credentials = flow.run_local_server(port=8003)
-            self.uploader.append(build("youtube", "v3", credentials=credentials))
-            time.sleep(1)
-
 
         self.upload_channel_id = upload_channel_id
-        self.number_of_upload_video = 15   #TODO 0
+        self.number_of_upload_video = 0
         self.number_of_uploader = 0
 
 
