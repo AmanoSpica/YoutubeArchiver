@@ -5,6 +5,7 @@ import datetime
 import asyncio
 
 import pandas as pd
+import requests
 from dotenv import load_dotenv, find_dotenv
 from term_printer import Color, cprint, StdText
 
@@ -34,9 +35,6 @@ db = DBManager(
 identity_files = []
 for i in range(1, 11):
     file_name = f"identity/client_secret_YoutubeArchiver-uploader{str(i).zfill(2)}.json"
-    # TODO 20240811用
-    if i == 4:
-        continue
     if os.path.exists(file_name):
         identity_files.append(file_name)
 
@@ -71,6 +69,21 @@ def insert_comma(text: str) -> str:
     # 3文字ごとにカンマを挿入
     text = int(text)
     return str("{:,}".format(text))
+
+
+def post_webhook(description):
+    webhook_url = "https://discord.com/api/webhooks/1272407304284667925/adUs5sYJ36kGm7t_Zq_5iHNK0rDJWMG1UoORPZWj5JdToZFc82CgzDWr2PpmS3Q5pbng"
+    payload = {"content": description}
+    try:
+        response = requests.post(webhook_url, json=payload, timeout=5)
+        response.raise_for_status()
+        response.close()
+
+    except TimeoutError:
+        print(f"Failed to send log to Discord: Timeout")
+
+    except Exception as e:
+        print(f"Failed to send log to Discord: {e}")
 
 
 def into_str(video):
@@ -192,9 +205,7 @@ async def save_to_database(json_data):
         await db.query(query)
 
 
-def download_video(video: pd.DataFrame, startTime: float, number: int, totalVideos: int):
-    cprint(f"\nProgress:  ({number + 1}/{totalVideos}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
-
+def download_video(video: pd.DataFrame, startTime: float):
     progress_time = time.time()
     video_file_path = download_youtube_video(video["id"], "temp/videos")
     cprint(f"Downloaded: {video_file_path}", attrs=[Color.BRIGHT_GREEN])
@@ -261,6 +272,41 @@ def CLI_dl_and_up():
     cprint("ダウンロードを開始するにはEnterキーを押してください。", attrs=[Color.BRIGHT_GREEN], end="")
     input()
 
+    # 前回の処理でアップロードされていない動画があるか確認
+    remain_videos = asyncio.run(
+        db.query(
+            "SELECT * FROM TargetVideo WHERE isDownloaded = 1 AND isPushed = 0 ORDER BY publishedAt ASC;"
+        )
+    )
+
+    if not remain_videos.empty:
+        cprint(f"前回の処理でアップロードされていない動画が{len(remain_videos)}本あります。", attrs=[Color.BRIGHT_RED])
+        cprint("アップロードを続行しますか？ (y/n): ", attrs=[Color.CYAN], end="")
+        is_upload_remain = input()
+        if is_upload_remain == "y" or is_upload_remain == "Y" or is_upload_remain == "yes" or is_upload_remain == "Yes":
+            startTime = time.time()
+            for i, video in remain_videos.iterrows():
+                cprint(f"\nProgress:  ({i + 1}/{len(remain_videos)}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
+                post_webhook(f"\nProgress:  ({i + 1}/{len(remain_videos)}) {video['title']}")
+
+                post_webhook(f"[Upload] Start: {video['title']}  ({video['id']})")
+                progress_time = time.time()
+                video_file_path = f"temp/videos/{video['id']}.mp4"
+                thumbnail_file_path = f"temp/thumbnails/{video['id']}.jpg"
+                upload_video(video, video_file_path, thumbnail_file_path, startTime)
+                post_webhook(f"[Upload] Complete: {video['title']}  ({video['id']})")
+
+                delete_temp_files(video, video_file_path, thumbnail_file_path)
+
+                cprint(f"Finished: {video['title']}", attrs=[Color.GREEN])
+                post_webhook(f"Finished: {video['title']}  ({video['id']})\nTotal Time: {time.time() - startTime:.2f} sec")
+                print(f"Time: {time.time() - progress_time:.2f} sec")
+                print(f"Total Time [remained_videos]: {time.time() - startTime:.2f} sec\n")
+
+            post_webhook(f"前回の処理でアップロードされていなかった動画のアップロードが完了しました。\nTotal Time: {time.time() - startTime:.2f} sec")
+            cprint("\n前回の処理でアップロードされていなかった動画のアップロードが完了しました。", attrs=[Color.MAGENTA])
+            print(f"Total Time [remained_videos]: {time.time() - startTime:.2f} sec\n")
+
     cprint("\n何本の動画をダウンロードしますか？ (投稿日時が古いものから処理します): ", attrs=[Color.CYAN], end="")
     output_video_number = input()
     if not output_video_number.isdecimal():
@@ -278,31 +324,6 @@ def CLI_dl_and_up():
         is_upload = True
         cprint("\nダウンロード・アップロードを開始します。", attrs=[Color.MAGENTA])
 
-        remain_videos = asyncio.run(
-            db.query(
-                "SELECT * FROM TargetVideo WHERE isDownloaded = 1 AND isPushed = 0 ORDER BY publishedAt ASC;"
-            )
-        )
-
-        if not remain_videos.empty:
-            cprint(f"前回の処理でアップロードされていない動画が{len(remain_videos)}本あります。", attrs=[Color.BRIGHT_RED])
-            cprint("アップロードを続行しますか？ (y/n): ", attrs=[Color.CYAN], end="")
-            is_upload_remain = input()
-            if is_upload_remain == "y" or is_upload_remain == "Y" or is_upload_remain == "yes" or is_upload_remain == "Yes":
-                startTime = time.time()
-                for i, video in remain_videos.iterrows():
-                    progress_time = time.time()
-                    video_file_path = f"temp/videos/{video['id']}.mp4"
-                    thumbnail_file_path = f"temp/thumbnails/{video['id']}.jpg"
-                    upload_video(video, video_file_path, thumbnail_file_path, startTime)
-                    delete_temp_files(video, video_file_path, thumbnail_file_path)
-
-                    cprint(f"Finished: {video['title']}", attrs=[Color.GREEN])
-                    print(f"Time: {time.time() - progress_time:.2f} sec")
-                    print(f"Total Time [remained_videos]: {time.time() - startTime:.2f} sec\n")
-
-                cprint("\n前回の処理でアップロードされていなかった動画のアップロードが完了しました。", attrs=[Color.MAGENTA])
-                print(f"Total Time [remained_videos]: {time.time() - startTime:.2f} sec\n")
 
     else:
         is_upload = False
@@ -317,25 +338,35 @@ def CLI_dl_and_up():
     print(f"\nGetting {len(target_videos)} videos...")
     startTime = time.time()
     for i, video in target_videos.iterrows():
+        cprint(f"\nProgress:  ({i + 1}/{len(target_videos)}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
+        post_webhook(f"\nProgress:  ({i + 1}/{len(target_videos)}) {video['title']}")
+
+        post_webhook(f"[Download] Start: {video['title']}  ({video['id']})")
         progress_time = time.time()
-        video_file_path, thumbnail_file_path = download_video(video, startTime, i, len(target_videos))
+        video_file_path, thumbnail_file_path = download_video(video, startTime)
+        post_webhook(f"[Download] Complete: {video['title']}  ({video['id']})")
 
         if is_upload:
+            post_webhook(f"[Upload] Start: {video['title']}  ({video['id']})")
             upload_video(video, video_file_path, thumbnail_file_path, startTime)
+            post_webhook(f"[Upload] Complete: {video['title']}  ({video['id']})")
+
             delete_temp_files(video, video_file_path, thumbnail_file_path)
 
         cprint(f"Finished: {video['title']}", attrs=[Color.GREEN])
+        post_webhook(f"Finished: {video['title']}  ({video['id']})\nTotal Time: {time.time() - startTime:.2f} sec")
         print(f"Time: {time.time() - progress_time:.2f} sec")
         print(f"Total Time: {time.time() - startTime:.2f} sec\n")
 
 
     cprint("\nダウンロード・アップロードが完了しました。", attrs=[Color.MAGENTA])
     print(f"Total Time: {time.time() - startTime:.2f} sec\n")
+    post_webhook(f"すべての動画のダウンロード・アップロードが完了しました。\nTotal Time: {time.time() - startTime:.2f} sec")
 
 
 
 def main():
-    # get_video_data.save_video_data()
+    get_video_data.save_video_data()
     video_data = load_json("data/videos.json")
     asyncio.run(save_to_database(video_data))
     CLI_dl_and_up()

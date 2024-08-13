@@ -9,9 +9,18 @@ import random
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from googleapiclient.errors import HttpError, ResumableUploadError
+from googleapiclient.errors import HttpError
 
 scopes = ["https://www.googleapis.com/auth/youtube.upload"]
+
+def googleapiclient_login(identity_file:str, port:int = 8080):
+    print(f"Login with {identity_file}\nRunning Login on port {port}")
+    flow = InstalledAppFlow.from_client_secrets_file(identity_file, scopes)
+    credentials = flow.run_local_server(port=port)
+    youtube = build("youtube", "v3", credentials=credentials)
+
+    return youtube
+
 
 
 class YoutubeVideoManager:
@@ -19,18 +28,15 @@ class YoutubeVideoManager:
                  upload_channel_id: str,
                  identity_file: str = "client_secret.json",
                  uploader_identity_file: list[str] = None):
-        flow = InstalledAppFlow.from_client_secrets_file(identity_file, scopes)
-        credentials = flow.run_local_server()
-        self.youtube = build("youtube", "v3", credentials=credentials)
+        self.uploader_identity_file = uploader_identity_file
+        self.youtube = googleapiclient_login(identity_file)
 
         self.uploader = []
         if not uploader_identity_file:
             self.uploader.append(self.youtube)
         else:
-            for identity in uploader_identity_file:
-                flow = InstalledAppFlow.from_client_secrets_file(identity, scopes)
-                credentials = flow.run_local_server()
-                self.uploader.append(build("youtube", "v3", credentials=credentials))
+            for i, identity in enumerate(uploader_identity_file):
+                self.uploader.append(googleapiclient_login(identity, port=8000 + i))
 
         self.upload_channel_id = upload_channel_id
         self.number_of_upload_video = 0
@@ -49,9 +55,11 @@ class YoutubeVideoManager:
         if self.number_of_uploader > len(self.uploader_identity_file):
             raise Exception("The number of videos uploaded has exceeded the limit.")
 
-        if self.number_of_upload_video % len(self.uploader) == 0:
+        # 6本ごとにuploaderを変更
+        if self.number_of_upload_video % 6 == 0 and self.number_of_upload_video != 0:
             self.number_of_uploader += 1
 
+        self.number_of_upload_video += 1
         yt_uploader = self.uploader[self.number_of_uploader]
 
         print(f"Uploader: {self.number_of_uploader}番目")
@@ -157,7 +165,7 @@ def resumable_upload(insert_request):
 
             if response is not None:
                 if 'id' in response:
-                    print("Video id '%s' was successfully uploaded." % response['id'])
+                    print("\rVideo id '%s' was successfully uploaded." % response['id'])
                 else:
                     print("Thumbnail was successfully uploaded.")
         except HttpError as e:
@@ -177,5 +185,6 @@ def resumable_upload(insert_request):
             sleep_seconds = random.random() * max_sleep
             print("Sleeping %f seconds and then retrying..." % sleep_seconds)
             time.sleep(sleep_seconds)
+            error = None
 
     return response
