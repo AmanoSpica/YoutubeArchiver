@@ -45,101 +45,6 @@ youtube = YoutubeVideoManager(
 )
 
 
-def load_json(filename):
-    with open(filename, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    return data
-
-
-def chunks(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]
-
-
-def format_datetime(datetime_str):
-    if datetime_str is None:
-        return "[非公開]"
-    if type(datetime_str) == str:
-        return datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S").strftime("%Y/%m/%d %H:%M:%S")
-    else:
-        return datetime_str.strftime("%Y/%m/%d %H:%M:%S")
-
-
-def insert_comma(text: str) -> str:
-    # 3文字ごとにカンマを挿入
-    text = int(text)
-    return str("{:,}".format(text))
-
-
-def post_webhook(description):
-    webhook_url = "https://discord.com/api/webhooks/1272407304284667925/adUs5sYJ36kGm7t_Zq_5iHNK0rDJWMG1UoORPZWj5JdToZFc82CgzDWr2PpmS3Q5pbng"
-    payload = {"content": description}
-    try:
-        response = requests.post(webhook_url, json=payload, timeout=5)
-        response.raise_for_status()
-        response.close()
-
-    except TimeoutError:
-        print(f"Failed to send log to Discord: Timeout")
-
-    except Exception as e:
-        print(f"Failed to send log to Discord: {e}")
-
-
-def into_str(video):
-    columns = []
-    columns.append(video["id"])
-
-    if video["isShorts"]:
-        columns.append("shorts")
-    elif "liveStreamingDetails" in video:
-        # ライブ配信アーカイブまたはプレミア公開
-        columns.append("liveArchive")
-    else:
-        columns.append("video")
-
-    columns.append(video["snippet"]["title"])
-    columns.append(video["snippet"]["description"]
-                   if "description" in video["snippet"] else None)
-    columns.append(video["snippet"]["publishedAt"].replace("T", " ").replace("Z", ""))
-
-    if "liveStreamingDetails" in video:
-        columns.append(video["liveStreamingDetails"]["scheduledStartTime"].replace("T", " ").replace(
-            "Z", "") if "scheduledStartTime" in video["liveStreamingDetails"] else None)
-        columns.append(video["liveStreamingDetails"]["actualStartTime"].replace("T", " ").replace(
-            "Z", "") if "actualStartTime" in video["liveStreamingDetails"] else None)
-        columns.append(video["liveStreamingDetails"]["actualEndTime"].replace("T", " ").replace(
-            "Z", "") if "actualEndTime" in video["liveStreamingDetails"] else None)
-    else:
-        columns.append(None)
-        columns.append(None)
-        columns.append(None)
-
-    columns.append(video["snippet"]["categoryId"]
-                   if "categoryId" in video["snippet"] else None)
-    columns.append("[" + ",".join([f"'{tag}'" for tag in video["snippet"]
-                   ["tags"]]) + "]" if "tags" in video["snippet"] else None)
-
-    thumbnails = video["snippet"]["thumbnails"]
-    if "maxres" in thumbnails:
-        columns.append(thumbnails["maxres"]["url"])
-    elif "standard" in thumbnails:
-        columns.append(thumbnails["standard"]["url"])
-    elif "high" in thumbnails:
-        columns.append(thumbnails["high"]["url"])
-    elif "medium" in thumbnails:
-        columns.append(thumbnails["medium"]["url"])
-    else:
-        columns.append(thumbnails["default"]["url"])
-
-    columns.append(video["statistics"]["commentCount"]
-                   if "commentCount" in video["statistics"] else None)
-    columns.append(video["statistics"]["likeCount"]
-                   if "likeCount" in video["statistics"] else None)
-    columns.append(video["statistics"]["viewCount"])
-    return columns
-
-
 def format_video_info(video_data: dict):
     title = video_data["title"]
     video_info = ""
@@ -169,42 +74,6 @@ def format_video_info(video_data: dict):
 
 
 
-async def save_to_database(json_data):
-    chunks_data = list(chunks(json_data, 30))
-    for chunk in chunks_data:
-        rows = []
-        for video in chunk:
-            columns = into_str(video)
-            rows.append(str(tuple(columns)).replace("None", "NULL"))
-
-        query = f"""
-            INSERT INTO TargetVideo
-                (id, videoType, title, description, publishedAt,
-                liveStreamingDetails_scheduledStartTime, liveStreamingDetails_actualStartTime,
-                liveStreamingDetails_actualEndTime, categoryId, tags, thumbnails_url,
-                commentCount, likeCount, viewCount)
-            VALUES
-                {",".join(rows)}
-            ON DUPLICATE KEY
-            UPDATE
-                videoType = VALUES(videoType),
-                title = VALUES(title),
-                description = VALUES(description),
-                publishedAt = VALUES(publishedAt),
-                liveStreamingDetails_scheduledStartTime = VALUES(liveStreamingDetails_scheduledStartTime),
-                liveStreamingDetails_actualStartTime = VALUES(liveStreamingDetails_actualStartTime),
-                liveStreamingDetails_actualEndTime = VALUES(liveStreamingDetails_actualEndTime),
-                categoryId = VALUES(categoryId),
-                tags = VALUES(tags),
-                thumbnails_url = VALUES(thumbnails_url),
-                commentCount = VALUES(commentCount),
-                likeCount = VALUES(likeCount),
-                viewCount = VALUES(viewCount);
-            """
-
-        await db.query(query)
-
-
 def download_video(video: pd.DataFrame, startTime: float):
     progress_time = time.time()
     video_file_path = download_youtube_video(video["id"], "temp/videos")
@@ -232,7 +101,7 @@ def upload_video(video: pd.DataFrame, video_file_path: str, thumbnail_file_path:
     cprint(f"Upload Progress: {video['title']}", attrs=[Color.BRIGHT_YELLOW])
 
     title, description = format_video_info(video)
-    youtube.upload_video(
+    response = youtube.upload_video(
         video_file_path=video_file_path,
         title=title,
         description=description,
@@ -248,7 +117,7 @@ def upload_video(video: pd.DataFrame, video_file_path: str, thumbnail_file_path:
     # Update database
     asyncio.run(
         db.query(
-            f"UPDATE TargetVideo SET isPushed = 1 WHERE id = '{video['id']}';"
+            f"UPDATE TargetVideo SET isPushed = 1, uploadVideoId = '{response['id']}' WHERE id = '{video['id']}';"
         )
     )
 
@@ -275,7 +144,7 @@ def CLI_dl_and_up():
     # 前回の処理でアップロードされていない動画があるか確認
     remain_videos = asyncio.run(
         db.query(
-            "SELECT * FROM TargetVideo WHERE isDownloaded = 1 AND isPushed = 0 ORDER BY publishedAt ASC;"
+            "SELECT id FROM TargetVideo WHERE isDownloaded = 1 AND isPushed = 0 ORDER BY publishedAt ASC;"
         )
     )
 
@@ -285,7 +154,10 @@ def CLI_dl_and_up():
         is_upload_remain = input()
         if is_upload_remain == "y" or is_upload_remain == "Y" or is_upload_remain == "yes" or is_upload_remain == "Yes":
             startTime = time.time()
-            for i, video in remain_videos.iterrows():
+            for i in range(len(remain_videos)):
+                video = asyncio.run(db.query(f"SELECT * FROM TargetVideo WHERE isDownloaded = 1 AND isPushed = 0 ORDER BY publishedAt ASC LIMIT 1;")).iloc[0]
+                if video.empty:
+                    continue
                 cprint(f"\nProgress:  ({i + 1}/{len(remain_videos)}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
                 post_webhook(f"\nProgress:  ({i + 1}/{len(remain_videos)}) {video['title']}")
 
@@ -329,17 +201,14 @@ def CLI_dl_and_up():
         is_upload = False
         cprint("\nダウンロードを開始します。", attrs=[Color.BRIGHT_YELLOW])
 
-    target_videos: pd.DataFrame = asyncio.run(
-        db.query(
-            f"SELECT * FROM TargetVideo WHERE isDownloaded = 0 AND isPushed = 0 ORDER BY publishedAt ASC LIMIT {output_video_number};"
-        )
-    )
-
-    print(f"\nGetting {len(target_videos)} videos...")
+    print(f"\nGetting {output_video_number} videos...")
     startTime = time.time()
-    for i, video in target_videos.iterrows():
-        cprint(f"\nProgress:  ({i + 1}/{len(target_videos)}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
-        post_webhook(f"\nProgress:  ({i + 1}/{len(target_videos)}) {video['title']}")
+    for i in range(output_video_number):
+        video = asyncio.run(db.query(f"SELECT * FROM TargetVideo WHERE isDownloaded = 0 AND isPushed = 0 ORDER BY publishedAt ASC LIMIT 1;")).iloc[0]
+        if video.empty:
+            continue
+        cprint(f"\nProgress:  ({i + 1}/{output_video_number}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
+        post_webhook(f"\nProgress:  ({i + 1}/{output_video_number}) {video['title']}")
 
         post_webhook(f"[Download] Start: {video['title']}  ({video['id']})")
         progress_time = time.time()
@@ -364,11 +233,45 @@ def CLI_dl_and_up():
     post_webhook(f"すべての動画のダウンロード・アップロードが完了しました。\nTotal Time: {time.time() - startTime:.2f} sec")
 
 
+def chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def format_datetime(datetime_str):
+    if datetime_str is None:
+        return "[非公開]"
+    if type(datetime_str) == str:
+        return datetime.datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S").strftime("%Y/%m/%d %H:%M:%S")
+    else:
+        return datetime_str.strftime("%Y/%m/%d %H:%M:%S")
+
+
+def insert_comma(text: str) -> str:
+    # 3文字ごとにカンマを挿入
+    text = int(text)
+    return str("{:,}".format(text))
+
+
+def post_webhook(description):
+    webhook_url = "https://discord.com/api/webhooks/1272407304284667925/adUs5sYJ36kGm7t_Zq_5iHNK0rDJWMG1UoORPZWj5JdToZFc82CgzDWr2PpmS3Q5pbng"
+    payload = {"content": description}
+    try:
+        response = requests.post(webhook_url, json=payload, timeout=5)
+        response.raise_for_status()
+        response.close()
+
+    except TimeoutError:
+        print(f"Failed to send log to Discord: Timeout")
+
+    except Exception as e:
+        print(f"Failed to send log to Discord: {e}")
+
+
+
 
 def main():
     get_video_data.save_video_data()
-    video_data = load_json("data/videos.json")
-    asyncio.run(save_to_database(video_data))
     CLI_dl_and_up()
 
 

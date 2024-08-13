@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 
-scopes = ["https://www.googleapis.com/auth/youtube.upload"]
+scopes = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl"]
 
 def googleapiclient_login(identity_file:str, port:int = 8080):
     print(f"Login with {identity_file}\nRunning Login on port {port}")
@@ -126,12 +126,13 @@ class YoutubeVideoManager:
                     "title": title,
                     "description": description,
                     "tags": tags,
-                    "categoryId": category_id
+                    "categoryId": category_id,
+                    "defaultLanguage": "ja_JP",
+                    "defaultAudioLanguage": "ja_JP"
                 }
             }
         )
         response = request.execute()
-        print(json.dumps(response, indent=4))
 
         return response
 
