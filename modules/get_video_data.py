@@ -155,7 +155,7 @@ async def save_to_database(json_data):
                 viewCount = VALUES(viewCount);
             """
 
-        await db.query(query)
+        await db.query(query.replace("Ninomae Ina'nis", "Ninomae Ina’nis"))
 
 
 def json_save(data, filename):
