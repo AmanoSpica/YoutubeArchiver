@@ -209,8 +209,8 @@ class YoutubeVideoManager:
 
     async def _select_uploader(self, value: int):
         while True:
-            uploader_data = await db.query(
-                f"SELECT * FROM QuotaData WHERE name LIKE 'YoutubeArchiver-uploader%' AND 10000 > quota + {value} ORDER BY name ASC LIMIT 1;").iloc[0]
+            uploader_data = (await db.query(
+                f"SELECT * FROM QuotaData WHERE name LIKE 'YoutubeArchiver-uploader%' AND 10000 > quota + {value} ORDER BY name ASC LIMIT 1;")).iloc[0]
             if uploader_data is None:
                 print(f"\rNo uploader available. Waiting for 15 minutes.  {datetime.now()}", end="")
                 time.sleep(60*15)
