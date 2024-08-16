@@ -3,26 +3,20 @@ import json
 import time
 import datetime
 import asyncio
+import threading
 
+import schedule
 import pandas as pd
 import requests
 from dotenv import load_dotenv, find_dotenv
-from term_printer import Color, cprint, StdText
+from term_printer import Color, cprint
 
 from modules.db import DBManager
-from modules.get_video_data import GetVideoData
 from modules.youtube_dl import download_youtube_video, download_youtube_thumbnail
 from modules.youtube_uploader import YoutubeVideoManager
 
 
 load_dotenv(find_dotenv())
-
-get_video_data = GetVideoData(
-    api_key=os.getenv("YOUTUBE_API_KEY"),
-    target_channel_id=os.getenv("TARGET_YOUTUBE_CHANNEL_ID"),
-    target_dir="data",
-    max_threads=20
-)
 
 db = DBManager(
     db_user=os.getenv("DB_USER"),
@@ -32,16 +26,11 @@ db = DBManager(
     db_database=os.getenv("DB_DATABASE")
 )
 
-identity_files = []
-for i in range(1, 11):
-    file_name = f"identity/client_secret_YoutubeArchiver-uploader{str(i).zfill(2)}.json"
-    if os.path.exists(file_name):
-        identity_files.append(file_name)
-
 youtube = YoutubeVideoManager(
+    api_key=os.getenv("YOUTUBE_API_KEY"),
+    target_channel_id=os.getenv("TARGET_YOUTUBE_CHANNEL_ID"),
     upload_channel_id=os.getenv("UPLOAD_YOUTUBE_CHANNEL_ID"),
-    identity_file="identity/client_secret.json",
-    uploader_identity_file=identity_files
+    max_threads=20
 )
 
 
@@ -186,9 +175,6 @@ def CLI_dl_and_up():
         return
 
     output_video_number = int(output_video_number)
-    if not int(output_video_number) <= 60:
-        cprint("60本以上の動画をダウンロードすることはできません。最大の60本を処理します。", attrs=[Color.RED])
-        output_video_number = 60
     cprint("ダウンロードした動画をアップロードしますか？ (y/n): ", attrs=[Color.CYAN], end="")
     is_upload = input()
 
@@ -268,11 +254,27 @@ def post_webhook(description):
         print(f"Failed to send log to Discord: {e}")
 
 
+def update_quota():
+    query = "UPDATE QuotaData SET quota = 0;"
+    asyncio.run(db.query(query))
+
+
+def scheduler():
+    while True:
+        schedule.run_pending()
+        time.sleep(5)
+
 
 
 def main():
-    get_video_data.save_video_data()
+    schedule.every().day.at("16:00").do(update_quota)
+    schedule.every().day.at("00:00").do(youtube.save_video_data)
+    schedule_thread = threading.Thread(target=scheduler)
+    schedule_thread.start()
+
+    youtube.save_video_data()
     CLI_dl_and_up()
+
 
 
 
