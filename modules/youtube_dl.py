@@ -4,8 +4,9 @@ import urllib.request
 
 def download_youtube_video(video_id, target_dir):
     ydl_opts = {
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+        'format': 'bestvideo+bestaudio/best',
         'outtmpl': f'{target_dir}/%(id)s.%(ext)s',
+        'format_sort': ['vcodec:h264','res','acodec:m4a'],
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -20,9 +21,3 @@ def download_youtube_thumbnail(video_id, target_dir, url):
     print(f"[urllib.request] Downloading thumbnail: {file_name}")
     urllib.request.urlretrieve(url, file_name)
     return file_name
-
-if __name__ == '__main__':
-    video_id = '6bnaBnd4kyU'
-    target_dir = 'temp/videos'
-    download_youtube_video(video_id, target_dir)
-    download_youtube_thumbnail(video_id, 'temp/thumbnails', 'https://i.ytimg.com/vi/6bnaBnd4kyU/maxresdefault.jpg')

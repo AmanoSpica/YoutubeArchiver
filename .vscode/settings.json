@@ -1,5 +1,6 @@
 {
 	"cSpell.words": [
+		"acodec",
 		"Archiver",
 		"bestaudio",
 		"bestvideo",
@@ -9,6 +10,7 @@
 		"outtmpl",
 		"postprocessors",
 		"preferedformat",
-		"RETRIABLE"
+		"RETRIABLE",
+		"vcodec"
 	]
 }
