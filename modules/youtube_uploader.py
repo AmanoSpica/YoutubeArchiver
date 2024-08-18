@@ -70,8 +70,7 @@ class YoutubeVideoManager:
         for d in uploader_data.itertuples():
             print(d.name)
             port = 8000 + int(d.name[-2:]) - 1
-            self.uploader[d.name] = googleapiclient_login(
-                d.identityFile, port)
+            self.uploader[d.name] = (d.identityFile, port)
 
     async def _quota(self, name: str, value: int):
         data = (await db.query(
@@ -218,6 +217,9 @@ class YoutubeVideoManager:
                 await db.query(
                     f"UPDATE QuotaData SET quota = quota + {value} WHERE name = '{uploader_data['name']}';")
                 break
+
+        if type(self.uploader[uploader_data["name"]]) == tuple:
+            self.uploader[uploader_data["name"]] = googleapiclient_login(self.uploader[uploader_data["name"]][0], self.uploader[uploader_data["name"]][1])
 
         return self.uploader[uploader_data["name"]]
 
