@@ -282,3 +282,4 @@ if __name__ == "__main__":
     cprint("##### Start #####", attrs=[Color.BRIGHT_RED])
     main()
     cprint("##### End #####", attrs=[Color.BRIGHT_RED])
+    os._exit(0)
