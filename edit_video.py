@@ -57,10 +57,11 @@ def format_video_info(video_data: dict):
 def get_video_data(id: str):
     video_data = asyncio.run(
         db.query(
-            f"SELECT * FROM TargetVideo WHERE id = '{id}';")).iloc[0]
+            f"SELECT * FROM TargetVideo WHERE id = '{id}';"))
     if video_data.empty:
         print("Error: Video data is not found.")
         return None, None
+    video_data = video_data.iloc[0]
     if video_data["uploadVideoId"] is None:
         uploaded_video_id = input("UploadedVideo ID: ")
         video_data = asyncio.run(

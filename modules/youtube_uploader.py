@@ -57,26 +57,27 @@ class YoutubeVideoManager:
 
         self.youtube_dataSystem = build("youtube", "v3", developerKey=api_key)
 
-        client_data = asyncio.run(db.query("SELECT * FROM QuotaData WHERE name = 'YoutubeArchiver';")).iloc[0]
+        client_data = asyncio.run(db.query("SELECT * FROM QuotaData WHERE name = 'YoutubeArchiver';"))
         if client_data.empty:
             raise Exception("No client data found in the database.")
+        client_data = client_data.iloc[0]
 
         self.youtube = googleapiclient_login(client_data["identityFile"])
 
         self.uploader = {}
         uploader_data = asyncio.run(db.query(
             "SELECT * FROM QuotaData WHERE name LIKE 'YoutubeArchiver-uploader%' ORDER BY name ASC;"))
-        print(uploader_data)
         for d in uploader_data.itertuples():
-            print(d.name)
+            print(f"Uploaderを読み込みました：{d.name}")
             port = 8000 + int(d.name[-2:]) - 1
             self.uploader[d.name] = (d.identityFile, port)
 
     async def _quota(self, name: str, value: int):
         data = (await db.query(
-            f"SELECT quota FROM QuotaData WHERE name = '{name}';")).iloc[0]
+            f"SELECT quota FROM QuotaData WHERE name = '{name}';"))
         if data.empty:
             raise Exception(f"No client data found in the database: {name}")
+        data = data.iloc[0]
         if not data["quota"] + value < 10000:
             raise Exception(f"Quota exceeded: {name}")
         await db.query(
@@ -209,11 +210,13 @@ class YoutubeVideoManager:
     async def _select_uploader(self, value: int):
         while True:
             uploader_data = (await db.query(
-                f"SELECT * FROM QuotaData WHERE name LIKE 'YoutubeArchiver-uploader%' AND 10000 > quota + {value} ORDER BY name ASC LIMIT 1;")).iloc[0]
-            if uploader_data is None:
+                f"SELECT * FROM QuotaData WHERE name LIKE 'YoutubeArchiver-uploader%' AND 10000 > quota + {value} ORDER BY name ASC LIMIT 1;"))
+            print(uploader_data)
+            if uploader_data.empty:
                 print(f"\rNo uploader available. Waiting for 15 minutes.  {datetime.now()}", end="")
                 time.sleep(60*15)
             else:
+                uploader_data = uploader_data.iloc[0]
                 await db.query(
                     f"UPDATE QuotaData SET quota = quota + {value} WHERE name = '{uploader_data['name']}';")
                 break
@@ -272,7 +275,7 @@ class YoutubeVideoManager:
                          thumbnail_file_path: str):
         asyncio.run(self._quota("YoutubeArchiver", 50))
         media = MediaFileUpload(thumbnail_file_path,
-                                chunksize=-1, resumable=True)  # 一括アップロード
+                                chunksize=-1, resumable=True)
         request = self.youtube.thumbnails().set(
             media_body=media,
             videoId=video_id

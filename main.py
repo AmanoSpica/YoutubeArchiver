@@ -144,9 +144,10 @@ def CLI_dl_and_up():
         if is_upload_remain == "y" or is_upload_remain == "Y" or is_upload_remain == "yes" or is_upload_remain == "Yes":
             startTime = time.time()
             for i in range(len(remain_videos)):
-                video = asyncio.run(db.query(f"SELECT * FROM TargetVideo WHERE isDownloaded = 1 AND isPushed = 0 ORDER BY publishedAt ASC LIMIT 1;")).iloc[0]
+                video = asyncio.run(db.query(f"SELECT * FROM TargetVideo WHERE isDownloaded = 1 AND isPushed = 0 ORDER BY publishedAt ASC LIMIT 1;"))
                 if video.empty:
                     continue
+                video = video.iloc[0]
                 cprint(f"\nProgress:  ({i + 1}/{len(remain_videos)}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
                 post_webhook(f"\nProgress:  ({i + 1}/{len(remain_videos)}) {video['title']}")
 
@@ -190,9 +191,10 @@ def CLI_dl_and_up():
     print(f"\nGetting {output_video_number} videos...")
     startTime = time.time()
     for i in range(output_video_number):
-        video = asyncio.run(db.query(f"SELECT * FROM TargetVideo WHERE isDownloaded = 0 AND isPushed = 0 ORDER BY publishedAt ASC LIMIT 1;")).iloc[0]
+        video = asyncio.run(db.query(f"SELECT * FROM TargetVideo WHERE isDownloaded = 0 AND isPushed = 0 ORDER BY publishedAt ASC LIMIT 1;"))
         if video.empty:
             continue
+        video = video.iloc[0]
         cprint(f"\nProgress:  ({i + 1}/{output_video_number}) {video['title']}", attrs=[Color.BRIGHT_YELLOW])
         post_webhook(f"\nProgress:  ({i + 1}/{output_video_number}) {video['title']}")
 
