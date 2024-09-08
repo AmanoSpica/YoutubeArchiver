@@ -59,14 +59,16 @@ class YoutubeVideoManager:
 
         client_data = asyncio.run(db.query("SELECT * FROM QuotaData WHERE name = 'YoutubeArchiver';"))
         if client_data.empty:
-            raise Exception("No client data found in the database.")
+            print("** No client data found in the database: YoutubeArchiver **")
+            print("**      I will use th first uploader data instead.       **")
+            client_data = asyncio.run(db.query("SELECT * FROM QuotaData LIMIT 1;"))
         client_data = client_data.iloc[0]
 
-        self.youtube = googleapiclient_login(client_data["identityFile"])
+        self.youtube = googleapiclient_login(client_data["identityFile"], port=8000)
 
         self.uploader = {}
         uploader_data = asyncio.run(db.query(
-            "SELECT * FROM QuotaData WHERE name LIKE 'YoutubeArchiver-uploader%' ORDER BY name ASC;"))
+            "SELECT * FROM QuotaData WHERE name LIKE 'default-%' ORDER BY name ASC;"))
         for d in uploader_data.itertuples():
             print(f"Uploaderを読み込みました：{d.name}")
             port = 8000 + int(d.name[-2:]) - 1
@@ -85,7 +87,7 @@ class YoutubeVideoManager:
         return
 
     def get_uploads_playlist_id(self):
-        asyncio.run(self._quota("YoutubeArchiver-DataSystem", 1))
+        asyncio.run(self._quota("default-01", 1))
         request = self.youtube_dataSystem.channels().list(
             part="contentDetails",
             id=self.target_channel_id,
@@ -104,7 +106,7 @@ class YoutubeVideoManager:
         )
 
         while request:
-            asyncio.run(self._quota("YoutubeArchiver-DataSystem", 1))
+            asyncio.run(self._quota("default-01", 1))
             response = request.execute()
             video_id_list.extend(list(
                 map(lambda item: item["snippet"]["resourceId"]["videoId"], response["items"])))
@@ -117,7 +119,7 @@ class YoutubeVideoManager:
 
         chunk_list = list(chunks(video_id_list, 50))  # max 50 id per request.
         for chunk in chunk_list:
-            asyncio.run(self._quota("YoutubeArchiver-DataSystem", 1))
+            asyncio.run(self._quota("default-01", 1))
             video_ids = ",".join(chunk)
             request = self.youtube_dataSystem.videos().list(
                 part="snippet,statistics,liveStreamingDetails,localizations",
@@ -210,7 +212,7 @@ class YoutubeVideoManager:
     async def _select_uploader(self, value: int):
         while True:
             uploader_data = (await db.query(
-                f"SELECT * FROM QuotaData WHERE name LIKE 'YoutubeArchiver-uploader%' AND 10000 > quota + {value} ORDER BY name ASC LIMIT 1;"))
+                f"SELECT * FROM QuotaData WHERE name LIKE 'default-%' AND 10000 > quota + {value} ORDER BY name ASC LIMIT 1;"))
             print(uploader_data)
             if uploader_data.empty:
                 print(f"\rNo uploader available. Waiting for 15 minutes.  {datetime.now()}", end="")
@@ -291,7 +293,7 @@ class YoutubeVideoManager:
                    description: str,
                    category_id: str,
                    tags: list[str] = []):
-        asyncio.run(self._quota("YoutubeArchiver-DataSystem", 50))
+        asyncio.run(self._quota("default-01", 50))
         request = self.youtube_dataSystem.videos().update(
             part="id,snippet",
             body={

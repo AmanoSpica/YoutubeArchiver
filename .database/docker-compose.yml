@@ -1,0 +1,13 @@
+services:
+  db:
+    build: .
+    volumes:
+      - ./temp:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_psw
+      MYSQL_DATABASE: YoutubeArchiver
+      MYSQL_USER: yt_archive
+      MYSQL_PASSWORD: yt_archive
+    ports:
+      - "12345:3306"
