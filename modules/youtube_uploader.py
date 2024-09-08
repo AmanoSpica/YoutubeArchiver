@@ -275,7 +275,7 @@ class YoutubeVideoManager:
     def upload_thumbnail(self,
                          video_id: str,
                          thumbnail_file_path: str):
-        asyncio.run(self._quota("YoutubeArchiver", 50))
+        asyncio.run(self._quota("default-01", 50))
         media = MediaFileUpload(thumbnail_file_path,
                                 chunksize=-1, resumable=True)
         request = self.youtube.thumbnails().set(
