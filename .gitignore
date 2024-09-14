@@ -168,3 +168,5 @@ sql_log.txt
 
 # GCP Credentials
 client_secret*.json
+
+node_modules/
