@@ -21,6 +21,7 @@ from modules.db import DBManager
 
 load_dotenv(find_dotenv())
 
+QUOTA_LIMIT: int = 210000
 
 db = DBManager(
     db_user=os.getenv("DB_USER"),
@@ -212,7 +213,7 @@ class YoutubeVideoManager:
     async def _select_uploader(self, value: int):
         while True:
             uploader_data = (await db.query(
-                f"SELECT * FROM QuotaData WHERE name LIKE 'default-%' AND 10000 > quota + {value} ORDER BY name ASC LIMIT 1;"))
+                f"SELECT * FROM QuotaData WHERE name LIKE 'default-%' AND {QUOTA_LIMIT} > quota + {value} ORDER BY name ASC LIMIT 1;"))
             print(uploader_data)
             if uploader_data.empty:
                 print(f"\rNo uploader available. Waiting for 15 minutes.  {datetime.now()}", end="")
