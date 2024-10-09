@@ -81,7 +81,7 @@ class YoutubeVideoManager:
         if data.empty:
             raise Exception(f"No client data found in the database: {name}")
         data = data.iloc[0]
-        if not data["quota"] + value < {QUOTA_LIMIT}:
+        if not data["quota"] + value < QUOTA_LIMIT:
             raise Exception(f"Quota exceeded: {name}")
         await db.query(
             f"UPDATE QuotaData SET quota = quota + {value} WHERE name = '{name}';")
